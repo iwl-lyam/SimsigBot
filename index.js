@@ -1,60 +1,78 @@
-import { Client } from '@stomp/stompjs';
-import { TCPWrapper } from '@stomp/tcp-wrapper';
+import {SignalLoop} from './simsig.js'
+import dotenv from 'dotenv'
+dotenv.config({path: "./secrets.env"})
+import {gatewayLogger} from "./logger.js";
 
-const client = new Client({
-  // hostname (or ip addess) and port number of the STOMP broker
-  webSocketFactory: () => new TCPWrapper('80.193.196.5', 51515),
-  heartbeatOutgoing: 20000,
-  heartbeatIncoming: 20000,
-  // debug: console.log,
-  onConnect: () => {
-    client.subscribe('/topic/TD_ALL_SIG_AREA', TD_ALL_SIG_AREA);
-  },
-});
+export default function bot() {
+  const db = new Mongo()
 
-const TD_ALL_SIG_AREA = msg => {
-  console.log("\n")
-  let body = JSON.parse(msg.body)
-  if (Object.hasOwn(body,"SG_MSG")) {
-    body = body.SG_MSG
-    switch (body.obj_type) {
-      case "signal":
-        
-        console.log("Area: "+body.area_id)
-        console.log("Signal number "+body.obj_id)
-        let aspect = ""
-        switch (parseInt(body.aspect)) {
-          case 0:
-            aspect = "red"
-            break
+  const conLink  = "wss://gateway.discord.gg/?v=10&encoding=json"
+  const con = new WebSocket(conLink)
+  con.on('open', () => {
+      gatewayLogger.info("Gateway connection open")
+  })
+
+  let hbint = 0
+  let ident = false
+  con.on('close', (code, reason) => {
+      gatewayLogger.error(`${code} ${reason}`)
+      bot()
+  })
+  con.on('message', message => {
+      message = JSON.parse(message)
+
+      switch(message.op) {
+          case 10:
+              gatewayLogger.verbose("Hello received")
+              hbint = message.d.heartbeat_interval
+              con.send(JSON.stringify({op: 1,s:null,t:null,d:{}}))
+              gatewayLogger.info("Heartbeat sent")
+              break
+          case 11:
+              gatewayLogger.info("Heartbeat acknowledged")
+              setTimeout(() => {
+                  con.send(JSON.stringify({op: 1,s:null,t:null,d:{}}))
+                  gatewayLogger.info("Heartbeat sent")
+              }, hbint)
+              gatewayLogger.verbose(`Time until next heartbeat: ${hbint}`)
+              gatewayLogger.verbose(`Identifying: ${!ident}`)
+
+              if (!ident) {
+                  con.send(JSON.stringify({op: 2, d: {
+                      token: process.env.TOKEN,
+                      intents: 33292,
+                      properties: {
+                          os: "darwin",
+                          browser: "who knows",
+                          device: "all change"
+                      }
+                  }}))
+
+                  gatewayLogger.verbose("Identify sent")
+                  ident = true;
+              }
+
+              break
           case 1:
-            aspect = "shunt"
-            break
-          case 2:
-            aspect = "yellow"
-            break
-          case 3:
-            aspect = "flashing yellow??"
-            break
-          case 4:
-            aspect = "double yellow"
-            break
-          case 5:
-            aspect = "flashing double yellow?? wtf??"
-            break
-          case 6:
-            aspect = "green"
-            break
-          default:
-            aspect = "fuck you"
-            break
-        }
-        console.log("Currently showing "+aspect)
-        break
-      default:
-        console.log("Not about a signal, but instead "+body.obj_type)
-    }
-  }
-}
+              gatewayLogger.info("Heartbeat received")
+              con.send(JSON.stringify({op: 1,s:null,t:null,d:{}}))
+              gatewayLogger.info("Heartbeat sent")
+              break
+          case 0:
+              gatewayLogger.debug(`Event: ${message.t}`)
+              if (message.t === "INTERACTION_CREATE") {
+                  // do later
+              } 
+              break
 
-client.activate();
+          default:
+              gatewayLogger.error(`Unknown gateway opcode sent: ${message.op}`)
+              throw new Error("Unknown gateway opcode sent")
+      }
+
+  })
+
+  SignalLoop.on("signalChange", () => {
+      // send signal embed thing
+  })
+}
