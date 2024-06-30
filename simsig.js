@@ -2,7 +2,8 @@ import { Client } from '@stomp/stompjs';
 import { TCPWrapper } from '@stomp/tcp-wrapper';
 import {EventEmitter} from 'node:events'
 
-export default SignalLoop = new EventEmitter
+const SignalLoop = new EventEmitter
+export default SignalLoop
 
 const client = new Client({
   // hostname (or ip addess) and port number of the STOMP broker
@@ -23,37 +24,6 @@ const TD_ALL_SIG_AREA = msg => {
       if (body.obj_id === last.obj_id) return
       switch (body.obj_type) {
         case "signal":
-          console.log("Area: "+body.area_id)
-          console.log("Signal number "+body.obj_id)
-          let aspect = ""
-          switch (parseInt(body.aspect)) {
-            case 0:
-              aspect = "red"
-              break
-            case 1:
-              aspect = "shunt"
-              break
-            case 2:
-              aspect = "yellow"
-              break
-            case 3:
-              aspect = "flashing yellow??"
-              break
-            case 4:
-              aspect = "double yellow"
-              break
-            case 5:
-              aspect = "flashing double yellow?? wtf??"
-              break
-            case 6:
-              aspect = "green"
-              break
-            default:
-              aspect = "fuck you"
-              break
-          }
-          console.log("Currently showing "+aspect)
-          console.log(body)
           SignalLoop.emit("signalChange", body)
           break
       }

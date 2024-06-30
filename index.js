@@ -1,11 +1,11 @@
-import {SignalLoop} from './simsig.js'
+import SignalLoop from './simsig.js'
 import dotenv from 'dotenv'
 dotenv.config({path: "./secrets.env"})
+import {WebSocket} from 'ws'
 import {gatewayLogger} from "./logger.js";
+import fetch from "node-fetch"
 
 export default function bot() {
-  const db = new Mongo()
-
   const conLink  = "wss://gateway.discord.gg/?v=10&encoding=json"
   const con = new WebSocket(conLink)
   con.on('open', () => {
@@ -40,7 +40,7 @@ export default function bot() {
               if (!ident) {
                   con.send(JSON.stringify({op: 2, d: {
                       token: process.env.TOKEN,
-                      intents: 33292,
+                      intents: 0,
                       properties: {
                           os: "darwin",
                           browser: "who knows",
@@ -72,7 +72,46 @@ export default function bot() {
 
   })
 
-  SignalLoop.on("signalChange", () => {
-      // send signal embed thing
+  SignalLoop.on("signalChange", body => {
+    gatewayLogger.error("Signal change found")
+    console.log("Area: "+body.area_id)
+    console.log("Signal number "+body.obj_id)
+    let aspect = ""
+    switch (parseInt(body.aspect)) {
+      case 0:
+        aspect = "red"
+        break
+      case 1:
+        aspect = "shunt"
+        break
+      case 2:
+        aspect = "yellow"
+        break
+      case 3:
+        aspect = "flashing yellow??"
+        break
+      case 4:
+        aspect = "double yellow"
+        break
+      case 5:
+        aspect = "flashing double yellow?? wtf??"
+        break
+      case 6:
+        aspect = "green"
+        break
+      default:
+        aspect = "fuck you"
+        break
+    }
+    console.log("Currently showing "+aspect)
+    // send embed in 1256877186523332628
+    fetch(`https://discord.com/api/v10/channels/1256877186523332628/messages`, {
+      method: "POST",
+      headers: {Authorization: "Bot "+process.env.TOKEN, "Content-Type": "application/json"},
+      body: JSON.stringify({
+        content: `Signal ${body.obj_id} has changed to aspect ${aspect} in scenario ${body.area_id}!`
+      })
+    }).then(res => res.text()).then(console.log)
   })
 }
+bot()
